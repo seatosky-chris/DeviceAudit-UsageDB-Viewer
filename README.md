@@ -4,7 +4,7 @@ A Vue 3 and TypeScript frontend designed for Azure Static Web Apps.
 
 ## Run locally
 
-Requires Node.js 20 or later.
+Requires Node.js 24.
 
 ```sh
 npm install

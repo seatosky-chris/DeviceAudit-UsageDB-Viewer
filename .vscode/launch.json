@@ -1,0 +1,17 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Vue: Launch in Internal Browser",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npm run dev",
+			"serverReadyAction": {
+				"action": "openIntegratedBrowser",
+				"uriFormat": "%s",
+				"pattern": "➜\\s+Local:\\s+(https?://\\S+)",
+        		"killOnServerStop": true
+			}
+		}
+	]
+}

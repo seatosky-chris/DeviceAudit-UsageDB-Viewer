@@ -10,7 +10,7 @@
     "module": "NodeNext",
     "target": "ESNext",
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
     "sourceMap": true,
     "strict": true,
     "moduleResolution": "NodeNext",

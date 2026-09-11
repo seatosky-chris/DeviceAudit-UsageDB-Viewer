@@ -1,4 +1,11 @@
-import { app, HttpRequest, InvocationContext, type HttpResponseInit } from "@azure/functions";
+import pkg from "@azure/functions"
+
+const { app } = pkg
+
+type HttpRequest = pkg.HttpRequest
+type InvocationContext = pkg.InvocationContext
+type HttpResponseInit = pkg.HttpResponseInit
+
 import { DefaultAzureCredential } from "@azure/identity";
 import { ResourceGraphClient } from "@azure/arm-resourcegraph";
 

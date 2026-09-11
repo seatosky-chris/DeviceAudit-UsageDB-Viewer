@@ -39,3 +39,48 @@ body { margin: 0; min-width: 320px; }
 h1 { margin: 0; font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.08; }
 
 .intro { max-width: 34rem; margin: 1.5rem 0 0; color: #526075; font-size: 1.125rem; line-height: 1.65; }
+
+.db-selector {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #dce3ef;
+}
+
+.db-selector label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #172033;
+}
+
+.dropdown {
+  width: 100%;
+  max-width: 20rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #dce3ef;
+  border-radius: 0.5rem;
+  font-family: inherit;
+  font-size: 1rem;
+  color: #172033;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.dropdown:focus {
+  outline: none;
+  border-color: #1769aa;
+  box-shadow: 0 0 0 3px rgba(23, 105, 170, 0.1);
+}
+
+.loading {
+  color: #526075;
+  font-style: italic;
+}
+
+.error {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #ef9a9a;
+}

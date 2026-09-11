@@ -2,16 +2,32 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Vue: Launch in Internal Browser",
 			"type": "node-terminal",
 			"request": "launch",
+			"name": "Vue: Launch in Internal Browser",
 			"command": "npm run dev",
 			"serverReadyAction": {
-				"action": "openIntegratedBrowser",
-				"uriFormat": "%s",
 				"pattern": "➜\\s+Local:\\s+(https?://\\S+)",
-        		"killOnServerStop": true
+				"uriFormat": "%s",
+				"action": "openIntegratedBrowser",
+				"killOnServerStop": true
 			}
+		},
+		{
+			"type": "node-terminal",
+			"request": "launch",
+			"name": "API: Launch Azure Functions",
+			"command": "npm run build && npm run start",
+			"cwd": "${workspaceFolder}/api"
+		}
+	],
+	"compounds": [
+		{
+			"name": "Launch Full Stack (Vue + API)",
+			"configurations": [
+				"API: Launch Azure Functions",
+				"Vue: Launch in Internal Browser"
+			]
 		}
 	]
 }

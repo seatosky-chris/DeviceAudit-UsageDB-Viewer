@@ -5,6 +5,10 @@
       "statusCode": 404
     },
     {
+      "route": "/api/*",
+      "allowedRoles": ["viewer", "administrator"]
+    },
+    {
       "route": "/assets/*",
       "allowedRoles": ["viewer", "administrator"]
     },

@@ -36,3 +36,35 @@ To grant a person access in the Azure portal:
 4. Generate the invitation and send the link to that person. They must sign in with the invited Microsoft account to activate the assignment.
 
 The Free plan uses Azure's preconfigured Entra provider. The invitation and role requirement protect the site, but do not prevent an external Microsoft account from reaching the sign-in screen. For tenant-only sign-in or Entra group-based role assignment, upgrade to the Standard plan and configure a custom Entra provider.
+
+## Required environment variables (API)
+
+The API endpoint (`/api/getDatabases`) uses Azure Resource Graph via `DefaultAzureCredential`.
+
+### 1) Create an App Registration (service principal)
+1. In the Azure Portal, go to **Microsoft Entra ID** → **App registrations** → **New registration**.
+2. Name the app (e.g. `DeviceAudit-UsageViewer-SWA-Backend`) and keep the supported account type as appropriate for your tenant.
+3. After creation:
+   - Copy **Directory (tenant) ID** → set as `AZURE_TENANT_ID`.
+   - Copy **Application (client) ID** → set as `AZURE_CLIENT_ID`.
+4. Create a **Client secret** (Certificates & secrets → New client secret): copy the **Value** immediately.
+   - Set the copied secret value as `AZURE_CLIENT_SECRET`.
+
+### 2) Grant Reader permissions
+Assign the app registration **Reader** access so it can query metadata for the Cosmos DB accounts.
+
+- Go to the Azure **Resource Group** that contains your Cosmos DB accounts (the one whose databases follow `stats-*`).
+- Select **Access control (IAM)** → **Add role assignment**.
+- Choose role **Reader**.
+- Select the app registration/service principal you created (e.g. `DeviceAudit-UsageViewer-SWA-Backend`).
+
+> If you prefer least privilege, you can further scope permissions, but `Reader` on the Cosmos DB resource group is the simplest starting point.
+
+### 3) Configure Static Web Apps application settings
+Set these **application settings** in the Static Web App (Functions) environment:
+
+- `AZURE_TENANT_ID` — your Entra tenant ID
+- `AZURE_CLIENT_ID` — the App Registration (service principal) client ID
+- `AZURE_CLIENT_SECRET` — the App Registration client secret value
+
+Locally, you can put these in `api/local.settings.json`.

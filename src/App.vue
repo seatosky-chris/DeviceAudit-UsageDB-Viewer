@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import EntityTable from './components/EntityTable.vue'
+import UsageHistoryTable from './components/UsageHistoryTable.vue'
+import PaginationBar from './components/PaginationBar.vue'
+import ToastNotification from './components/ToastNotification.vue'
 
 type EntityType = 'computer' | 'user'
 interface EntityLinks {
@@ -282,18 +286,6 @@ function entityName(entity: Entity): string {
   return typeof name === 'string' && name ? name : entity.id
 }
 
-function serialNumbers(entity: Entity): string {
-  const serialNumber = entity.SerialNumber
-  if (typeof serialNumber !== 'string') return '—'
-
-  const hostname = typeof entity.Hostname === 'string' ? entity.Hostname.trim().toLocaleLowerCase() : ''
-  const serials = serialNumber.split('|')
-    .map(serial => serial.trim())
-    .filter(serial => serial && serial.toLocaleLowerCase() !== hostname)
-
-  return serials.length ? serials.join(', ') : '—'
-}
-
 function formatValue(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
@@ -301,11 +293,6 @@ function formatValue(value: string | number | null | undefined): string {
     return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString()
   }
   return String(value)
-}
-
-function monthLabel(month: string): string {
-  const date = new Date(`${month}-01T00:00:00`)
-  return Number.isNaN(date.valueOf()) ? month : date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
 
 watch([selectedDatabase, entityType], resetEntityView)
@@ -393,79 +380,21 @@ onUnmounted(() => {
             <span class="page-indicator">Page {{ entityPageIndex + 1 }}</span>
           </div>
 
-          <div class="table-frame">
-            <div v-if="isLoadingEntities" class="table-state" role="status">Loading {{ entityLabel.toLowerCase() }}…</div>
-            <div v-else-if="entityLoadFailed" class="table-state">The {{ entityLabel.toLowerCase() }} list is unavailable.</div>
-            <div v-else-if="entities.length === 0" class="table-state">
-              No {{ entityLabel.toLowerCase() }} found for this account.
-            </div>
-            <div v-else class="table-scroll">
-              <table>
-                <thead>
-                  <tr v-if="entityType === 'computer'">
-                    <th>Computer</th><th>Serial number(s)</th><th>Type</th><th>Manufacturer</th><th>Model</th><th>Operating system</th><th>Last updated</th>
-                  </tr>
-                  <tr v-else>
-                    <th>Username</th><th>AD username</th><th>Domain</th><th>Account type</th><th>Email</th><th>Last updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="entity in entities" :key="entity.id">
-                    <td>
-                      <div class="entity-cell">
-                        <button class="entity-link" :aria-label="`View usage for ${entityName(entity)}`" @click="openUsage(entity)">
-                          <span>{{ entityName(entity) }}</span>
-                          <small>{{ entity.id }}</small>
-                        </button>
-                        <div class="entity-links">
-                          <a
-                            v-for="(href, index) in entity.links?.itGlue ?? []"
-                            :key="`itglue-${href}`"
-                            class="external-link"
-                            :href="href"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :aria-label="`Open IT Glue record for ${entityName(entity)}${(entity.links?.itGlue.length ?? 0) > 1 ? `, link ${index + 1}` : ''}`"
-                          >{{ (entity.links?.itGlue.length ?? 0) > 1 ? `IT Glue ${index + 1}` : 'IT Glue' }}</a>
-                          <a
-                            v-for="(href, index) in entity.links?.dattoRmm ?? []"
-                            :key="`datto-${href}`"
-                            class="external-link"
-                            :href="href"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :aria-label="`Open Datto RMM record for ${entityName(entity)}${(entity.links?.dattoRmm.length ?? 0) > 1 ? `, link ${index + 1}` : ''}`"
-                          >{{ (entity.links?.dattoRmm.length ?? 0) > 1 ? `Datto RMM ${index + 1}` : 'Datto RMM' }}</a>
-                        </div>
-                      </div>
-                    </td>
-                    <template v-if="entityType === 'computer'">
-                      <td>{{ serialNumbers(entity) }}</td>
-                      <td>{{ formatValue(entity.DeviceType) }}</td>
-                      <td>{{ formatValue(entity.Manufacturer) }}</td>
-                      <td>{{ formatValue(entity.Model) }}</td>
-                      <td>{{ formatValue(entity.OS) }}</td>
-                    </template>
-                    <template v-else>
-                      <td>{{ formatValue(entity.ADUsername) }}</td>
-                      <td>{{ formatValue(entity.Domain) }}</td>
-                      <td>{{ formatValue(entity.DomainOrLocal) }}</td>
-                      <td>{{ formatValue(entity.O365Email) }}</td>
-                    </template>
-                    <td>{{ formatValue(entity.LastUpdated) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <EntityTable 
+            :entities="entities"
+            :entity-type="entityType"
+            :is-loading="isLoadingEntities"
+            :load-failed="entityLoadFailed"
+            @select="openUsage"
+          />
 
-          <div class="pagination-bar">
-            <span>Page {{ entityPageIndex + 1 }}</span>
-            <div class="pagination-actions">
-              <button class="page-button" :disabled="entityPageIndex === 0 || isLoadingEntities" @click="moveEntityPage(-1)">Previous</button>
-              <button class="page-button page-button-primary" :disabled="!nextEntityToken || isLoadingEntities" @click="moveEntityPage(1)">Next</button>
-            </div>
-          </div>
+          <PaginationBar
+            :current-page="entityPageIndex + 1"
+            :has-next="!!nextEntityToken"
+            :disabled="isLoadingEntities"
+            @previous="moveEntityPage(-1)"
+            @next="moveEntityPage(1)"
+          />
         </template>
 
         <section v-else class="usage-view" aria-labelledby="usage-title">
@@ -492,29 +421,13 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="table-frame">
-            <div v-if="isLoadingUsage" class="table-state" role="status">Loading full usage history…</div>
-            <div v-else-if="usageLoadFailed" class="table-state">Usage history is unavailable.</div>
-            <div v-else-if="historyRows.length === 0" class="table-state">No monthly usage history available for this {{ entityType }}.</div>
-            <div v-else class="table-scroll">
-              <table class="history-table">
-                <thead><tr><th>Month</th><th>Active days</th><th>Month activity (over {{ partTimePercentage }}%)</th></tr></thead>
-                <tbody>
-                  <tr v-for="row in visibleHistory" :key="row.month">
-                    <td>{{ monthLabel(row.month) }}</td>
-                    <td>{{ row.days }}</td>
-                    <td>
-                      <div class="percent-cell">
-                        <span class="percentage-value" :class="{ 'percentage-over-threshold': row.overThreshold }">{{ row.percent === undefined ? '—' : `${row.percent}%` }}</span>
-                        <span v-if="row.percent !== undefined" class="percent-track" :class="{ 'percent-track-over-threshold': row.overThreshold }"><span :style="{ width: `${Math.min(Math.max(row.percent, 0), 100)}%` }"></span></span>
-                        <span v-if="row.overThreshold" class="threshold-label">At/over threshold</span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <UsageHistoryTable
+            :history-rows="visibleHistory"
+            :part-time-percentage="partTimePercentage"
+            :is-loading="isLoadingUsage"
+            :load-failed="usageLoadFailed"
+            :entity-type="entityType"
+          />
 
           <div v-if="historyRows.length" class="pagination-bar">
             <span>{{ historyRows.length }} months · Page {{ historyPage + 1 }} of {{ historyPageCount }}</span>
@@ -537,9 +450,6 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <div v-if="toastMessage" class="toast" role="alert">
-      <span>{{ toastMessage }}</span>
-      <button aria-label="Dismiss notification" @click="toastMessage = ''">×</button>
-    </div>
+    <ToastNotification :message="toastMessage" @dismiss="toastMessage = ''" />
   </main>
 </template>

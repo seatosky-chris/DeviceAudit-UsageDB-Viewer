@@ -25,6 +25,12 @@ interface UsageData {
   partTimePercentage: number
 }
 
+interface RouteParams {
+  database?: string
+  entityType?: EntityType
+  entityId?: string
+}
+
 const entityPageSize = 25
 const historyPageSize = 12
 const databases = ref<string[]>([])
@@ -48,6 +54,92 @@ const toastMessage = ref('')
 let toastTimer: number | undefined
 let entityController: AbortController | undefined
 let usageController: AbortController | undefined
+
+// Hash-based router functions
+function parseHash(): RouteParams {
+  const hash = window.location.hash.slice(1)
+  if (!hash) return {}
+  
+  const params: RouteParams = {}
+  const parts = hash.split('/')
+  
+  if (parts[0]) params.database = decodeURIComponent(parts[0])
+  if (parts[1] && (parts[1] === 'computer' || parts[1] === 'user')) {
+    params.entityType = parts[1]
+  }
+  if (parts[2]) params.entityId = decodeURIComponent(parts[2])
+  
+  return params
+}
+
+function updateHash(database?: string, type?: EntityType, entityId?: string) {
+  const parts: string[] = []
+  if (database) {
+    parts.push(encodeURIComponent(database))
+    if (type) {
+      parts.push(type)
+      if (entityId) {
+        parts.push(encodeURIComponent(entityId))
+      }
+    }
+  }
+  const newHash = parts.length ? `#${parts.join('/')}` : ''
+  if (window.location.hash !== newHash) {
+    window.location.hash = newHash
+  }
+}
+
+function handleHashChange() {
+  const route = parseHash()
+  
+  if (route.database && route.database !== selectedDatabase.value) {
+    selectedDatabase.value = route.database
+  }
+  
+  if (route.entityType && route.entityType !== entityType.value) {
+    entityType.value = route.entityType
+  }
+  
+  if (route.entityId && route.database && route.entityType) {
+    loadEntityById(route.database, route.entityType, route.entityId)
+  } else if (selectedEntity.value) {
+    returnToEntities()
+  }
+}
+
+async function loadEntityById(database: string, type: EntityType, entityId: string) {
+  if (selectedEntity.value?.id === entityId) return
+  
+  usageController?.abort()
+  const controller = new AbortController()
+  usageController = controller
+  
+  const placeholderEntity: Entity = { id: entityId }
+  selectedEntity.value = placeholderEntity
+  usage.value = null
+  historyPage.value = 0
+  usageLoadFailed.value = false
+  isLoadingUsage.value = true
+  
+  const params = new URLSearchParams({
+    accountName: database,
+    entityType: type,
+    entityId: entityId
+  })
+  
+  try {
+    const response = await fetch(`/api/getEntityUsage?${params}`, { signal: controller.signal })
+    if (!response.ok) throw new Error(await readError(response))
+    usage.value = await response.json() as UsageData
+    partTimePercentage.value = usage.value.partTimePercentage ?? 70
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') return
+    showToast(error instanceof Error ? error.message : 'Could not load usage history.')
+    usageLoadFailed.value = true
+  } finally {
+    if (!controller.signal.aborted) isLoadingUsage.value = false
+  }
+}
 
 const entityLabel = computed(() => entityType.value === 'computer' ? 'Computers' : 'Users')
 const historyRows = computed(() => {
@@ -131,7 +223,10 @@ function resetEntityView() {
   entityLoadFailed.value = false
   entityTokens.value = [null]
   entityPageIndex.value = 0
-  if (selectedDatabase.value) void loadEntities(null)
+  if (selectedDatabase.value) {
+    updateHash(selectedDatabase.value, entityType.value)
+    void loadEntities(null)
+  }
 }
 
 async function moveEntityPage(direction: -1 | 1) {
@@ -144,6 +239,7 @@ async function moveEntityPage(direction: -1 | 1) {
 }
 
 async function openUsage(entity: Entity) {
+  updateHash(selectedDatabase.value, entityType.value, entity.id)
   usageController?.abort()
   const controller = new AbortController()
   usageController = controller
@@ -174,6 +270,7 @@ async function openUsage(entity: Entity) {
 }
 
 function returnToEntities() {
+  updateHash(selectedDatabase.value, entityType.value)
   usageController?.abort()
   selectedEntity.value = null
   usage.value = null
@@ -214,11 +311,27 @@ function monthLabel(month: string): string {
 watch([selectedDatabase, entityType], resetEntityView)
 
 onMounted(async () => {
+  window.addEventListener('hashchange', handleHashChange)
+  
   try {
     const response = await fetch('/api/getDatabases')
     if (!response.ok) throw new Error(await readError(response))
     const data = await response.json() as { databases?: string[] }
     databases.value = data.databases ?? []
+    
+    // Apply initial route from URL hash
+    const route = parseHash()
+    if (route.database) {
+      selectedDatabase.value = route.database
+      if (route.entityType) {
+        entityType.value = route.entityType
+      }
+      // Entity loading will be triggered by the watch or handleHashChange
+      if (route.entityId) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        handleHashChange()
+      }
+    }
   } catch (error) {
     databaseLoadFailed.value = true
     showToast(error instanceof Error ? error.message : 'Could not load customer databases.')
@@ -228,6 +341,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('hashchange', handleHashChange)
   entityController?.abort()
   usageController?.abort()
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)

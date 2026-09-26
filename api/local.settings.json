@@ -7,6 +7,13 @@
 
     "AZURE_TENANT_ID": "<set in Azure portal>",
     "AZURE_CLIENT_ID": "<set in Azure portal>",
-    "AZURE_CLIENT_SECRET": "<set in Azure portal>"
+    "AZURE_CLIENT_SECRET": "<set in Azure portal>",
+
+    "KEY_BROKER_URL": "<set in Azure portal>",
+    "KEY_BROKER_API_KEY": "<set in Azure portal>",
+    "KEY_BROKER_CUSTOMER_MAP": "{}",
+    "PART_TIME_PERCENTAGE": "70",
+    "ITGLUE_BASE_URL": "",
+    "DATTO_RMM_BASE_URL": ""
   }
 }

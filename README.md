@@ -68,3 +68,23 @@ Set these **application settings** in the Static Web App (Functions) environment
 - `AZURE_CLIENT_SECRET` — the App Registration client secret value
 
 Locally, you can put these in `api/local.settings.json`.
+
+### ITGlue device links
+
+Set `ITGLUE_BASE_URL` to an ITGlue URL containing the organization ID
+placeholder `{organizationID}`. The API reads the customer's `ITGOrgID` from
+the Cosmos DB `Variables` container using the Key Broker's `variables` token.
+It selects the collection by entity type, then appends the ITGlue ID. For example,
+either of these settings is accepted:
+
+```text
+ITGLUE_BASE_URL=https://contoso.itglue.com/{organizationID}/configurations/
+ITGLUE_BASE_URL=https://contoso.itglue.com/{organizationID}/contacts/
+```
+
+Computer links use `configurations` and user links use `contacts`, regardless
+of which collection appears in the setting. For example, with organization ID
+`300`, a computer ID of `208` links to
+`https://contoso.itglue.com/300/configurations/208`, while a user ID of `501`
+links to `https://contoso.itglue.com/300/contacts/501`. ITGlue links are omitted
+when the setting is missing or the customer's `ITGOrgID` cannot be retrieved.

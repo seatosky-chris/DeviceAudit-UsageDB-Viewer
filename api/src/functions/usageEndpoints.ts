@@ -22,6 +22,8 @@ interface UsageDocument {
 
 const databaseName = "DeviceUsage"
 const maximumPageSize = 100
+const itGlueOrganizationIdPlaceholder = /\{organizationID\}|\{organizationId\}/
+const itGlueOrganizationIdCache = new Map<string, Promise<string | null>>()
 
 interface KeyBrokerResponse {
     Token?: unknown
@@ -123,6 +125,32 @@ function getContainer(accountName: string, name: string, token: string): Contain
     return client.database(databaseName).container(name)
 }
 
+function getItGlueOrganizationId(accountName: string): Promise<string | null> {
+    const cachedOrganizationId = itGlueOrganizationIdCache.get(accountName)
+    if (cachedOrganizationId) return cachedOrganizationId
+
+    const organizationIdPromise = (async (): Promise<string | null> => {
+        try {
+            const token = await getResourceToken(accountName, "variables")
+            const response = await getContainer(accountName, "Variables", token)
+                .items.query<{ ITGOrgID?: unknown }>({
+                    query: "SELECT TOP 1 c.ITGOrgID FROM c WHERE c.variable = @variable",
+                    parameters: [{ name: "@variable", value: "ITGOrgID" }]
+                })
+                .fetchAll()
+            const organizationId = response.resources[0]?.ITGOrgID
+            return typeof organizationId === "string" && /^\d+$/.test(organizationId)
+                ? organizationId
+                : null
+        } catch {
+            return null
+        }
+    })()
+
+    itGlueOrganizationIdCache.set(accountName, organizationIdPromise)
+    return organizationIdPromise
+}
+
 function splitExternalIds(value: unknown): string[] {
     if (typeof value !== "string" && typeof value !== "number") return []
 
@@ -149,6 +177,31 @@ function buildExternalLinks(baseUrlValue: string | undefined, idValue: unknown):
         link.pathname = `${basePath}/${encodeURIComponent(id)}`
         return link.toString()
     })
+}
+
+function buildItGlueLinks(
+    baseUrlValue: string | undefined,
+    idValue: unknown,
+    organizationId: string | null,
+    entityType: EntityType
+): string[] {
+    if (!organizationId || !baseUrlValue?.trim() || !itGlueOrganizationIdPlaceholder.test(baseUrlValue)) return []
+
+    let baseUrl: URL
+    try {
+        baseUrl = new URL(baseUrlValue.trim().replace(itGlueOrganizationIdPlaceholder, encodeURIComponent(organizationId)))
+    } catch {
+        return []
+    }
+    if (baseUrl.protocol !== "https:" || baseUrl.username || baseUrl.password) return []
+
+    const basePath = baseUrl.pathname
+        .replace(/\/(?:configurations|contacts)\/?$/, "")
+        .replace(/\/+$/, "")
+    const collection = entityType === "computer" ? "configurations" : "contacts"
+    baseUrl.pathname = `${basePath}/${collection}`
+
+    return buildExternalLinks(baseUrl.toString(), idValue)
 }
 
 function badRequest(message: string): HttpResponseInit {
@@ -190,6 +243,9 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
     try {
         const tokenType = entityType === "computer" ? "computers" : "users"
         const token = await getResourceToken(accountName, tokenType)
+        const itGlueOrganizationId = process.env.ITGLUE_BASE_URL && itGlueOrganizationIdPlaceholder.test(process.env.ITGLUE_BASE_URL)
+            ? await getItGlueOrganizationId(accountName)
+            : null
         const options = {
             partitionKey: entityType,
             maxItemCount: pageSize,
@@ -208,7 +264,7 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
                 entities: page.resources.map(entity => ({
                     ...entity,
                     links: {
-                        itGlue: buildExternalLinks(process.env.ITGLUE_BASE_URL, entity.ITG_ID),
+                        itGlue: buildItGlueLinks(process.env.ITGLUE_BASE_URL, entity.ITG_ID, itGlueOrganizationId, entityType),
                         dattoRmm: entityType === "computer"
                             ? buildExternalLinks(process.env.DATTO_RMM_BASE_URL, entity.RMM_ID)
                             : []

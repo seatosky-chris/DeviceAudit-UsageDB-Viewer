@@ -235,10 +235,13 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
         ? Math.min(Math.max(requestedPageSize, 1), maximumPageSize)
         : 50
     const continuationToken = request.query.get("continuationToken")
+    const includeOlder = request.query.get("includeOlder") === "true"
     const containerName = entityType === "computer" ? "Computers" : "Users"
-    const query = entityType === "computer"
+    const query = (entityType === "computer"
         ? "SELECT c.id, c.Hostname, c.SerialNumber, c.RMM_ID, c.ITG_ID, c.DeviceType, c.Manufacturer, c.Model, c.OS, c.LastUpdated FROM c WHERE c.type = @type"
-        : "SELECT c.id, c.Username, c.ADUsername, c.ITG_ID, c.Domain, c.DomainOrLocal, c.O365Email, c.LastUpdated FROM c WHERE c.type = @type"
+        : "SELECT c.id, c.Username, c.ADUsername, c.ITG_ID, c.Domain, c.DomainOrLocal, c.O365Email, c.LastUpdated FROM c WHERE c.type = @type")
+        + (includeOlder ? "" : " AND c.LastUpdated >= @cutoff")
+    const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
 
     try {
         const tokenType = entityType === "computer" ? "computers" : "users"
@@ -254,7 +257,10 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
         const page = await getContainer(accountName, containerName, token)
             .items.query({
                 query,
-                parameters: [{ name: "@type", value: entityType }]
+                parameters: [
+                    { name: "@type", value: entityType },
+                    ...(!includeOlder ? [{ name: "@cutoff", value: cutoff }] : [])
+                ]
             }, options)
             .fetchNext()
 

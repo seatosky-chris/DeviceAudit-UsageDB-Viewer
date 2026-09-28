@@ -40,6 +40,7 @@ const historyPageSize = 12
 const databases = ref<string[]>([])
 const selectedDatabase = ref('')
 const entityType = ref<EntityType>('user')
+const includeOlderEntities = ref(false)
 const entities = ref<Entity[]>([])
 const nextEntityToken = ref<string | null>(null)
 const entityTokens = ref<(string | null)[]>([null])
@@ -197,6 +198,7 @@ async function loadEntities(token: string | null = entityTokens.value[entityPage
     entityType: entityType.value,
     pageSize: String(entityPageSize)
   })
+  if (includeOlderEntities.value) params.set('includeOlder', 'true')
   if (token) params.set('continuationToken', token)
 
   try {
@@ -295,7 +297,7 @@ function formatValue(value: string | number | null | undefined): string {
   return String(value)
 }
 
-watch([selectedDatabase, entityType], resetEntityView)
+watch([selectedDatabase, entityType, includeOlderEntities], resetEntityView)
 
 onMounted(async () => {
   window.addEventListener('hashchange', handleHashChange)
@@ -368,6 +370,10 @@ onUnmounted(() => {
             <button :aria-pressed="entityType === 'computer'" @click="entityType = 'computer'">Computers</button>
             <button :aria-pressed="entityType === 'user'" @click="entityType = 'user'">Users</button>
           </div>
+          <label class="age-filter-control">
+            <input v-model="includeOlderEntities" type="checkbox" />
+            Include records not seen in the past year
+          </label>
           <span class="result-context">{{ selectedDatabase }} <span>/</span> {{ entityLabel }}</span>
         </nav>
 

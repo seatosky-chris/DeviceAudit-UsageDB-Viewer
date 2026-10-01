@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import EntityTable from './components/EntityTable.vue'
 import UsageHistoryTable from './components/UsageHistoryTable.vue'
 import PaginationBar from './components/PaginationBar.vue'
@@ -35,16 +35,29 @@ interface RouteParams {
   entityId?: string
 }
 
+interface EntitySort {
+  key: string
+  direction: 'asc' | 'desc'
+}
+
 const entityPageSize = 25
 const historyPageSize = 12
 const databases = ref<string[]>([])
 const selectedDatabase = ref('')
 const entityType = ref<EntityType>('user')
 const includeOlderEntities = ref(false)
+const entitySort = reactive<Record<EntityType, EntitySort>>({
+  computer: { key: 'Hostname', direction: 'asc' },
+  user: { key: 'Username', direction: 'asc' }
+})
+const activeEntitySort = computed(() => entitySort[entityType.value])
 const entities = ref<Entity[]>([])
 const nextEntityToken = ref<string | null>(null)
 const entityTokens = ref<(string | null)[]>([null])
 const entityPageIndex = ref(0)
+const entitySearchField = ref('Username')
+const entitySearchQuery = ref('')
+const entitySearchMode = ref<'prefix' | 'contains'>('prefix')
 const selectedEntity = ref<Entity | null>(null)
 const usage = ref<UsageData | null>(null)
 const partTimePercentage = ref(70)
@@ -59,6 +72,7 @@ const toastMessage = ref('')
 let toastTimer: number | undefined
 let entityController: AbortController | undefined
 let usageController: AbortController | undefined
+let entitySearchTimer: number | undefined
 
 // Hash-based router functions
 function parseHash(): RouteParams {
@@ -196,9 +210,16 @@ async function loadEntities(token: string | null = entityTokens.value[entityPage
   const params = new URLSearchParams({
     accountName: selectedDatabase.value,
     entityType: entityType.value,
-    pageSize: String(entityPageSize)
+    pageSize: String(entityPageSize),
+    sortBy: activeEntitySort.value.key,
+    sortDirection: activeEntitySort.value.direction
   })
   if (includeOlderEntities.value) params.set('includeOlder', 'true')
+  if (entitySearchQuery.value.trim()) {
+    params.set('searchBy', entitySearchField.value)
+    params.set('search', entitySearchQuery.value.trim())
+    params.set('searchMode', entitySearchMode.value)
+  }
   if (token) params.set('continuationToken', token)
 
   try {
@@ -217,8 +238,34 @@ async function loadEntities(token: string | null = entityTokens.value[entityPage
   }
 }
 
+function updateEntitySearch(search: { field: string; query: string; mode: 'prefix' | 'contains' }) {
+  const searchWasActive = Boolean(entitySearchQuery.value.trim())
+  entitySearchField.value = search.field
+  entitySearchQuery.value = search.query
+  entitySearchMode.value = search.mode
+  if (!search.query.trim() && !searchWasActive) return
+
+  entityController?.abort()
+  if (entitySearchTimer !== undefined) window.clearTimeout(entitySearchTimer)
+  entityTokens.value = [null]
+  entityPageIndex.value = 0
+  nextEntityToken.value = null
+  entities.value = []
+  entityLoadFailed.value = false
+
+  if (!selectedDatabase.value) return
+
+  isLoadingEntities.value = true
+  entitySearchTimer = window.setTimeout(() => {
+    entitySearchTimer = undefined
+    void loadEntities(null)
+  }, 300)
+}
+
 function resetEntityView() {
   entityController?.abort()
+  if (entitySearchTimer !== undefined) window.clearTimeout(entitySearchTimer)
+  entitySearchTimer = undefined
   usageController?.abort()
   selectedEntity.value = null
   usage.value = null
@@ -297,7 +344,19 @@ function formatValue(value: string | number | null | undefined): string {
   return String(value)
 }
 
-watch([selectedDatabase, entityType, includeOlderEntities], resetEntityView)
+watch([
+  selectedDatabase,
+  entityType,
+  includeOlderEntities,
+  () => activeEntitySort.value.key,
+  () => activeEntitySort.value.direction
+], (values, previousValues) => {
+  if (values[0] !== previousValues[0] || values[1] !== previousValues[1]) {
+    entitySearchField.value = entityType.value === 'computer' ? 'Hostname' : 'Username'
+    entitySearchQuery.value = ''
+  }
+  resetEntityView()
+})
 
 onMounted(async () => {
   window.addEventListener('hashchange', handleHashChange)
@@ -333,6 +392,7 @@ onUnmounted(() => {
   window.removeEventListener('hashchange', handleHashChange)
   entityController?.abort()
   usageController?.abort()
+  if (entitySearchTimer !== undefined) window.clearTimeout(entitySearchTimer)
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
 })
 </script>
@@ -389,9 +449,16 @@ onUnmounted(() => {
           <EntityTable 
             :entities="entities"
             :entity-type="entityType"
+            :search-field="entitySearchField"
+            :search-query="entitySearchQuery"
+            :search-mode="entitySearchMode"
+            :sort-key="activeEntitySort.key"
+            :sort-direction="activeEntitySort.direction"
             :is-loading="isLoadingEntities"
             :load-failed="entityLoadFailed"
             @select="openUsage"
+            @search-change="updateEntitySearch"
+            @sort-change="entitySort[entityType] = $event"
           />
 
           <PaginationBar

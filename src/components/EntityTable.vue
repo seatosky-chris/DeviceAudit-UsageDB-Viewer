@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 type EntityType = 'computer' | 'user'
+type SearchMode = 'prefix' | 'contains'
 interface EntityLinks {
   itGlue: string[]
   dattoRmm: string[]
@@ -13,66 +14,72 @@ interface SortConfig {
   direction: 'asc' | 'desc'
 }
 
+interface SearchField {
+  key: string
+  label: string
+}
+
 const props = defineProps<{
   entities: Entity[]
   entityType: EntityType
+  searchField: string
+  searchQuery: string
+  searchMode: SearchMode
+  sortKey: string
+  sortDirection: SortConfig['direction']
   isLoading: boolean
   loadFailed: boolean
 }>()
 
 const emit = defineEmits<{
   select: [entity: Entity]
+  sortChange: [sort: SortConfig]
+  searchChange: [search: { field: string; query: string; mode: SearchMode }]
 }>()
 
 const entityLabel = computed(() => props.entityType === 'computer' ? 'computers' : 'users')
+const searchFields = computed<SearchField[]>(() => props.entityType === 'computer'
+  ? [
+      { key: 'Hostname', label: 'Computer' },
+      { key: 'SerialNumber', label: 'Serial number' },
+      { key: 'DeviceType', label: 'Type' },
+      { key: 'Manufacturer', label: 'Manufacturer' },
+      { key: 'Model', label: 'Model' },
+      { key: 'OS', label: 'Operating system' },
+      { key: 'id', label: 'Entity ID' }
+    ]
+  : [
+      { key: 'Username', label: 'Username' },
+      { key: 'ADUsername', label: 'AD username' },
+      { key: 'Domain', label: 'Domain' },
+      { key: 'DomainOrLocal', label: 'Account type' },
+      { key: 'O365Email', label: 'Email' },
+      { key: 'id', label: 'Entity ID' }
+    ])
 
-const searchQuery = ref('')
-const sortConfig = ref<SortConfig>({ key: props.entityType === 'computer' ? 'Hostname' : 'Username', direction: 'asc' })
+function updateSearchField(event: Event) {
+  emit('searchChange', {
+    field: (event.target as HTMLSelectElement).value,
+    query: props.searchQuery,
+    mode: props.searchMode
+  })
+}
 
-watch(() => props.entityType, entityType => {
-  sortConfig.value = { key: entityType === 'computer' ? 'Hostname' : 'Username', direction: 'asc' }
-})
+function updateSearchQuery(event: Event) {
+  emit('searchChange', {
+    field: props.searchField,
+    query: (event.target as HTMLInputElement).value,
+    mode: props.searchMode
+  })
+}
 
-const filteredAndSortedEntities = computed(() => {
-  let result = [...props.entities]
-
-  // Apply search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(entity => {
-      // Search in all string properties
-      return Object.entries(entity).some(([key, value]) =>
-        typeof value === 'string' && value.toLowerCase().includes(query)
-      )
-    })
-  }
-
-  // Apply sorting
-  if (sortConfig.value.key) {
-    result.sort((a, b) => {
-      const aValue = a[sortConfig.value.key]
-      const bValue = b[sortConfig.value.key]
-
-      // Handle null/undefined values
-      if (aValue === null || aValue === undefined) return 1
-      if (bValue === null || bValue === undefined) return -1
-
-      // Compare values
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        const aStr = aValue.toLowerCase()
-        const bStr = bValue.toLowerCase()
-        if (aStr < bStr) return sortConfig.value.direction === 'asc' ? -1 : 1
-        if (aStr > bStr) return sortConfig.value.direction === 'asc' ? 1 : -1
-      } else {
-        if (aValue < bValue) return sortConfig.value.direction === 'asc' ? -1 : -1
-        if (aValue > bValue) return sortConfig.value.direction === 'asc' ? 1 : 1
-      }
-      return 0
-    })
-  }
-
-  return result
-})
+function updateSearchMode(event: Event) {
+  emit('searchChange', {
+    field: props.searchField,
+    query: props.searchQuery,
+    mode: (event.target as HTMLSelectElement).value as SearchMode
+  })
+}
 
 function entityName(entity: Entity): string {
   const name = props.entityType === 'computer' ? entity.Hostname : entity.Username
@@ -101,27 +108,31 @@ function formatValue(value: string | number | null | undefined): string {
 }
 
 function setSort(key: string) {
-  if (sortConfig.value.key === key) {
-    // Toggle direction if same key
-    sortConfig.value.direction = sortConfig.value.direction === 'asc' ? 'desc' : 'asc'
-  } else {
-    // Set new key and default to ascending
-    sortConfig.value.key = key
-    sortConfig.value.direction = 'asc'
-  }
+  const direction = props.sortKey === key && props.sortDirection === 'asc' ? 'desc' : 'asc'
+  emit('sortChange', { key, direction })
 }
 </script>
 
 <template>
   <div class="table-controls">
     <div class="search-control">
+      <label for="entity-search-field">Field:</label>
+      <select id="entity-search-field" :value="searchField" @change="updateSearchField">
+        <option v-for="field in searchFields" :key="field.key" :value="field.key">{{ field.label }}</option>
+      </select>
+      <label for="entity-search-mode">Match:</label>
+      <select id="entity-search-mode" :value="searchMode" @change="updateSearchMode">
+        <option value="prefix">Starts with</option>
+        <option value="contains">Contains (slower)</option>
+      </select>
       <label for="entity-search">Search:</label>
       <input
         id="entity-search"
-        v-model="searchQuery"
+        :value="searchQuery"
+        @input="updateSearchQuery"
         type="search"
-        placeholder="Search all fields..."
-        aria-label="Search entities"
+        placeholder="Enter search text..."
+        aria-label="Search selected field"
       />
     </div>
   </div>
@@ -133,7 +144,7 @@ function setSort(key: string) {
     <div v-else-if="loadFailed" class="table-state">
       The {{ entityLabel }} list is unavailable.
     </div>
-    <div v-else-if="filteredAndSortedEntities.length === 0" class="table-state">
+    <div v-else-if="entities.length === 0" class="table-state">
       No {{ entityLabel }} found matching your search.
     </div>
     <div v-else class="table-scroll">
@@ -143,56 +154,56 @@ function setSort(key: string) {
             <th>
               <button class="sort-header" @click="setSort('Hostname')">
                 Computer
-                <span v-if="sortConfig.key === 'Hostname'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'Hostname'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('SerialNumber')">
                 Serial number(s)
-                <span v-if="sortConfig.key === 'SerialNumber'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'SerialNumber'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('DeviceType')">
                 Type
-                <span v-if="sortConfig.key === 'DeviceType'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'DeviceType'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('Manufacturer')">
                 Manufacturer
-                <span v-if="sortConfig.key === 'Manufacturer'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'Manufacturer'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('Model')">
                 Model
-                <span v-if="sortConfig.key === 'Model'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'Model'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('OS')">
                 Operating system
-                <span v-if="sortConfig.key === 'OS'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'OS'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('LastUpdated')">
                 Last updated
-                <span v-if="sortConfig.key === 'LastUpdated'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'LastUpdated'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
@@ -201,55 +212,55 @@ function setSort(key: string) {
             <th>
               <button class="sort-header" @click="setSort('Username')">
                 Username
-                <span v-if="sortConfig.key === 'Username'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'Username'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('ADUsername')">
                 AD username
-                <span v-if="sortConfig.key === 'ADUsername'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'ADUsername'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('Domain')">
                 Domain
-                <span v-if="sortConfig.key === 'Domain'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'Domain'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('DomainOrLocal')">
                 Account type
-                <span v-if="sortConfig.key === 'DomainOrLocal'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'DomainOrLocal'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('O365Email')">
                 Email
-                <span v-if="sortConfig.key === 'O365Email'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'O365Email'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
             <th>
               <button class="sort-header" @click="setSort('LastUpdated')">
                 Last updated
-                <span v-if="sortConfig.key === 'LastUpdated'" class="sort-indicator">
-                  {{ sortConfig.direction === 'asc' ? '↑' : '↓' }}
+                <span v-if="sortKey === 'LastUpdated'" class="sort-indicator">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </button>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="entity in filteredAndSortedEntities" :key="entity.id">
+          <tr v-for="entity in entities" :key="entity.id">
             <td>
               <div class="entity-cell">
                 <button 
@@ -327,13 +338,18 @@ function setSort(key: string) {
   color: var(--color-text-secondary);
 }
 
-.search-control input {
+.search-control input,
+.search-control select {
   padding: 0.5rem 1rem;
   border: 1px solid var(--color-border);
   border-radius: 0.25rem;
   background-color: var(--color-input-background);
   color: var(--color-text);
   font-size: 0.875rem;
+}
+
+.search-control input {
+  min-width: 14rem;
 }
 
 .sort-header {

@@ -24,6 +24,44 @@ const databaseName = "DeviceUsage"
 const maximumPageSize = 100
 const itGlueOrganizationIdPlaceholder = /\{organizationID\}|\{organizationId\}/
 const itGlueOrganizationIdCache = new Map<string, Promise<string | null>>()
+const sortableFields: Record<EntityType, Record<string, string>> = {
+    computer: {
+        Hostname: "c.Hostname",
+        SerialNumber: "c.SerialNumber",
+        DeviceType: "c.DeviceType",
+        Manufacturer: "c.Manufacturer",
+        Model: "c.Model",
+        OS: "c.OS",
+        LastUpdated: "c.LastUpdated"
+    },
+    user: {
+        Username: "c.Username",
+        ADUsername: "c.ADUsername",
+        Domain: "c.Domain",
+        DomainOrLocal: "c.DomainOrLocal",
+        O365Email: "c.O365Email",
+        LastUpdated: "c.LastUpdated"
+    }
+}
+const searchableFields: Record<EntityType, Record<string, string>> = {
+    computer: {
+        id: "c.id",
+        Hostname: "c.Hostname",
+        SerialNumber: "c.SerialNumber",
+        DeviceType: "c.DeviceType",
+        Manufacturer: "c.Manufacturer",
+        Model: "c.Model",
+        OS: "c.OS"
+    },
+    user: {
+        id: "c.id",
+        Username: "c.Username",
+        ADUsername: "c.ADUsername",
+        Domain: "c.Domain",
+        DomainOrLocal: "c.DomainOrLocal",
+        O365Email: "c.O365Email"
+    }
+}
 
 interface KeyBrokerResponse {
     Token?: unknown
@@ -236,11 +274,29 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
         : 50
     const continuationToken = request.query.get("continuationToken")
     const includeOlder = request.query.get("includeOlder") === "true"
+    const searchText = request.query.get("search")?.trim() ?? ""
+    const requestedSearchField = request.query.get("searchBy")
+    const requestedSearchMode = request.query.get("searchMode") ?? "prefix"
+    const searchFunction = requestedSearchMode === "contains" ? "CONTAINS" : "STARTSWITH"
+    const searchField = requestedSearchField && Object.hasOwn(searchableFields[entityType], requestedSearchField)
+        ? searchableFields[entityType][requestedSearchField]
+        : undefined
+    if (searchText.length > 100) return badRequest("Search text must be 100 characters or fewer.")
+    if (searchText && !searchField) return badRequest("A valid searchBy field is required when searching.")
+    if (searchText && requestedSearchMode !== "prefix" && requestedSearchMode !== "contains") {
+        return badRequest("searchMode must be prefix or contains.")
+    }
+    const defaultSortKey = entityType === "computer" ? "Hostname" : "Username"
+    const sortField = sortableFields[entityType][request.query.get("sortBy") ?? ""]
+        ?? sortableFields[entityType][defaultSortKey]
+    const sortDirection = request.query.get("sortDirection") === "desc" ? "DESC" : "ASC"
     const containerName = entityType === "computer" ? "Computers" : "Users"
     const query = (entityType === "computer"
         ? "SELECT c.id, c.Hostname, c.SerialNumber, c.RMM_ID, c.ITG_ID, c.DeviceType, c.Manufacturer, c.Model, c.OS, c.LastUpdated FROM c WHERE c.type = @type"
         : "SELECT c.id, c.Username, c.ADUsername, c.ITG_ID, c.Domain, c.DomainOrLocal, c.O365Email, c.LastUpdated FROM c WHERE c.type = @type")
         + (includeOlder ? "" : " AND c.LastUpdated >= @cutoff")
+        + (searchText && searchField ? ` AND ${searchFunction}(${searchField}, @search, true)` : "")
+        + ` ORDER BY ${sortField} ${sortDirection}`
     const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
 
     try {
@@ -259,7 +315,8 @@ export async function getEntities(request: HttpRequest, context: InvocationConte
                 query,
                 parameters: [
                     { name: "@type", value: entityType },
-                    ...(!includeOlder ? [{ name: "@cutoff", value: cutoff }] : [])
+                    ...(!includeOlder ? [{ name: "@cutoff", value: cutoff }] : []),
+                    ...(searchText ? [{ name: "@search", value: searchText }] : [])
                 ]
             }, options)
             .fetchNext()

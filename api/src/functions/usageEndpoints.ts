@@ -26,7 +26,7 @@ const itGlueOrganizationIdPlaceholder = /\{organizationID\}|\{organizationId\}/
 const itGlueOrganizationIdCache = new Map<string, Promise<string | null>>()
 const sortableFields: Record<EntityType, Record<string, string>> = {
     computer: {
-        Hostname: "c.Hostname",
+        Hostname: "c.cp_sort_Hostname",
         SerialNumber: "c.SerialNumber",
         DeviceType: "c.DeviceType",
         Manufacturer: "c.Manufacturer",
@@ -35,11 +35,11 @@ const sortableFields: Record<EntityType, Record<string, string>> = {
         LastUpdated: "c.LastUpdated"
     },
     user: {
-        Username: "c.Username",
-        ADUsername: "c.ADUsername",
-        Domain: "c.Domain",
+        Username: "c.cp_sort_Username",
+        ADUsername: "c.cp_sort_ADUsername",
+        Domain: "c.cp_sort_Domain",
         DomainOrLocal: "c.DomainOrLocal",
-        O365Email: "c.O365Email",
+        O365Email: "c.cp_sort_O365Email",
         LastUpdated: "c.LastUpdated"
     }
 }

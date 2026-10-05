@@ -272,7 +272,7 @@ function setSort(key: string) {
               <div class="entity-cell">
                 <a
                   class="entity-link" 
-                  :href="`#${encodeURIComponent(database)}/${entityType}/${encodeURIComponent(entity.id)}`"
+                  :href="`#${encodeURIComponent(database)}/${entityType}/${encodeURIComponent(entity.id)}/${encodeURIComponent(entityName(entity))}`"
                   :aria-label="`View usage for ${entityName(entity)}`" 
                   @click="selectEntity($event, entity)"
                 >

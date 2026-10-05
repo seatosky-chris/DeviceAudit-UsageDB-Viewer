@@ -33,6 +33,7 @@ interface RouteParams {
   database?: string
   entityType?: EntityType
   entityId?: string
+  entityName?: string
 }
 
 interface EntitySort {
@@ -88,11 +89,12 @@ function parseHash(): RouteParams {
     params.entityType = parts[1]
   }
   if (parts[2]) params.entityId = decodeURIComponent(parts[2])
+  if (parts[3]) params.entityName = decodeURIComponent(parts[3])
   
   return params
 }
 
-function updateHash(database?: string, type?: EntityType, entityId?: string) {
+function updateHash(database?: string, type?: EntityType, entityId?: string, name?: string) {
   const parts: string[] = []
   if (database) {
     parts.push(encodeURIComponent(database))
@@ -100,6 +102,7 @@ function updateHash(database?: string, type?: EntityType, entityId?: string) {
       parts.push(type)
       if (entityId) {
         parts.push(encodeURIComponent(entityId))
+        if (name) parts.push(encodeURIComponent(name))
       }
     }
   }
@@ -121,20 +124,21 @@ function handleHashChange() {
   }
   
   if (route.entityId && route.database && route.entityType) {
-    loadEntityById(route.database, route.entityType, route.entityId)
+    loadEntityById(route.database, route.entityType, route.entityId, route.entityName)
   } else if (selectedEntity.value) {
     returnToEntities()
   }
 }
 
-async function loadEntityById(database: string, type: EntityType, entityId: string) {
+async function loadEntityById(database: string, type: EntityType, entityId: string, name?: string) {
   if (selectedEntity.value?.id === entityId) return
   
   usageController?.abort()
   const controller = new AbortController()
   usageController = controller
   
-  const placeholderEntity: Entity = { id: entityId }
+  const nameField = type === 'computer' ? 'Hostname' : 'Username'
+  const placeholderEntity: Entity = { id: entityId, [nameField]: name }
   selectedEntity.value = placeholderEntity
   usage.value = null
   historyPage.value = 0
@@ -293,7 +297,7 @@ async function moveEntityPage(direction: -1 | 1) {
 }
 
 async function openUsage(entity: Entity) {
-  updateHash(selectedDatabase.value, entityType.value, entity.id)
+  updateHash(selectedDatabase.value, entityType.value, entity.id, entityName(entity))
   usageController?.abort()
   const controller = new AbortController()
   usageController = controller

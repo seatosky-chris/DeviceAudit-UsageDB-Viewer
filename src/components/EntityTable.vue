@@ -21,6 +21,7 @@ interface SearchField {
 
 const props = defineProps<{
   entities: Entity[]
+  database: string
   entityType: EntityType
   searchField: string
   searchQuery: string
@@ -84,6 +85,12 @@ function updateSearchMode(event: Event) {
 function entityName(entity: Entity): string {
   const name = props.entityType === 'computer' ? entity.Hostname : entity.Username
   return typeof name === 'string' && name ? name : entity.id
+}
+
+function selectEntity(event: MouseEvent, entity: Entity) {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  emit('select', entity)
 }
 
 function serialNumbers(entity: Entity): string {
@@ -263,14 +270,15 @@ function setSort(key: string) {
           <tr v-for="entity in entities" :key="entity.id">
             <td>
               <div class="entity-cell">
-                <button 
+                <a
                   class="entity-link" 
+                  :href="`#${encodeURIComponent(database)}/${entityType}/${encodeURIComponent(entity.id)}`"
                   :aria-label="`View usage for ${entityName(entity)}`" 
-                  @click="emit('select', entity)"
+                  @click="selectEntity($event, entity)"
                 >
                   <span>{{ entityName(entity) }}</span>
                   <small>{{ entity.id }}</small>
-                </button>
+                </a>
                 <div class="entity-links">
                   <template v-for="(href, index) in entity.links?.itGlue ?? []" :key="`itglue-${href}`">
                     <a

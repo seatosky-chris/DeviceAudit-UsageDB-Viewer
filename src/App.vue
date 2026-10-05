@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import EntityTable from './components/EntityTable.vue'
 import UsageHistoryTable from './components/UsageHistoryTable.vue'
 import PaginationBar from './components/PaginationBar.vue'
@@ -73,6 +73,7 @@ let toastTimer: number | undefined
 let entityController: AbortController | undefined
 let usageController: AbortController | undefined
 let entitySearchTimer: number | undefined
+let isApplyingInitialRoute = false
 
 // Hash-based router functions
 function parseHash(): RouteParams {
@@ -351,6 +352,8 @@ watch([
   () => activeEntitySort.value.key,
   () => activeEntitySort.value.direction
 ], (values, previousValues) => {
+  if (isApplyingInitialRoute) return
+
   if (values[0] !== previousValues[0] || values[1] !== previousValues[1]) {
     entitySearchField.value = entityType.value === 'computer' ? 'Hostname' : 'Username'
     entitySearchQuery.value = ''
@@ -370,14 +373,18 @@ onMounted(async () => {
     // Apply initial route from URL hash
     const route = parseHash()
     if (route.database) {
+      isApplyingInitialRoute = true
       selectedDatabase.value = route.database
       if (route.entityType) {
         entityType.value = route.entityType
       }
-      // Entity loading will be triggered by the watch or handleHashChange
+      await nextTick()
+      isApplyingInitialRoute = false
+
       if (route.entityId) {
-        await new Promise(resolve => setTimeout(resolve, 100))
         handleHashChange()
+      } else {
+        void loadEntities(null)
       }
     }
   } catch (error) {
@@ -448,6 +455,7 @@ onUnmounted(() => {
 
           <EntityTable 
             :entities="entities"
+            :database="selectedDatabase"
             :entity-type="entityType"
             :search-field="entitySearchField"
             :search-query="entitySearchQuery"

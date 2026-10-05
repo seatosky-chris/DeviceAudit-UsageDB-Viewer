@@ -65,7 +65,7 @@ th { padding: 0.75rem 0.85rem; background: #f2f6f4; color: #5d6d68; font-size: 0
 td { padding: 0.7rem 0.85rem; border-top: 1px solid #edf1ef; color: #36494f; font-size: 0.83rem; white-space: nowrap; }
 tbody tr:hover { background: #f8fbf9; }
 .entity-cell { display: flex; align-items: center; gap: 0.75rem; }
-.entity-link { display: grid; gap: 0.2rem; max-width: 18rem; padding: 0; border: 0; background: transparent; color: var(--accent); text-align: left; }
+.entity-link { display: grid; gap: 0.2rem; max-width: 18rem; padding: 0; color: var(--accent); text-align: left; text-decoration: none; }
 .entity-link > span { font-weight: 700; }
 .entity-link small { overflow: hidden; color: #85928f; font-size: 0.7rem; text-overflow: ellipsis; }
 .entity-link:hover > span { text-decoration: underline; text-underline-offset: 3px; }

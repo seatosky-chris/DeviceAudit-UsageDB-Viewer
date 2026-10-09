@@ -130,7 +130,7 @@ async function getResourceToken(accountName: string, tokenType: string): Promise
                 customer: getCustomerCode(accountName),
                 tokenType
             }),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(30000)
         })
     } catch {
         throw new KeyBrokerError("Could not connect to the Key Broker.")
